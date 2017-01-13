@@ -1,6 +1,12 @@
 # misc_util
 Miscelaneous utilities that I don't know yet where to put precisely...
 
+## gipkoutils
+
+### chrono_trace
+
+A decorator so see how much time is spent in a function
+
 
 ## Dependencies
 * python 3 (developed and tested with python 3.4)
