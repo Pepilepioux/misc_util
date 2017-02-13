@@ -7,6 +7,19 @@ Miscelaneous utilities that I don't know yet where to put precisely...
 
 A decorator so see how much time is spent in a function
 
+### Recepteur
+
+A utility that listens a TCP port and triggers another program depending on the content of received data.
+It has a few builtin features, like processing a stop order, returning some information and setting logging
+level and 3 timeout values.
+
+### exemple_recepteur
+
+An example how to use Recepteur.
+
+### controleur
+
+A small command line utility to send data to Recepteur
 
 ## Dependencies
 * python 3 (developed and tested with python 3.4)
