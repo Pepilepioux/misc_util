@@ -7,6 +7,11 @@ Miscelaneous utilities that I don't know yet where to put precisely...
 
 A decorator so see how much time is spent in a function
 
+### expurge
+
+A function that replaces all unicode characters (> 255) in a string with a printable character (default ¶) to prevent raising an exception
+when attempting to print a text that contain some exotic unicode.
+
 ### Recepteur
 
 A utility that listens a TCP port and triggers another program depending on the content of received data.
