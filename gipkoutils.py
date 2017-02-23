@@ -71,33 +71,22 @@ class Recepteur:
         self.server_socket.bind(("", portEcoute))
         logger.info('%s Moi : %s en écoute sur le port %s' % (__name__, self.moi, portEcoute))
 
-        self.doc = """
-Syntaxe :
-<nom du programme destinataire> <commande> [ <valeurs des paramètres> ]
-
-Pour connaitre le nom du programme qui répond, envoyer "t'es qui, toi ?"
-(AVEC les guillemets !)
-
-Commandes :
-info : pour obtenir des informations sur les divers paramètres du programme
-
-stop : pas besoin d'explication. Pas d'autre paramètre
-
-logging : le niveau du logger.
-    CRITICAL 	50	ERROR 		40	WARNING 	30
-    INFO 		20	DEBUG 		10	NOTSET 		0
-
-loghandler	: le niveau des loghandlers.
-    lancer d'abord la commande "info" pour avoir la liste des handlers et
-    leurs caractéristiques.
-    Cette commande prend deux paramètres, le premier est le numéro de handler,
-    le deuxième est sa nouvelle valeur.
-
-tempo1 : la valeur de la tempo de la boucle principale.
-    Le 3° paramètre est la valeur en secondes
-
-tempo2, tempo3 : tempos dépendant de l'appli.
-"""
+        self.doc = 'Syntaxe :\n<nom du programme destinataire> <commande> [ <valeurs des paramètres> ]\n'
+        self.doc += 'Pour connaitre le nom du programme qui répond, envoyer "t\'es qui, toi ?"\n(AVEC les guillemets !)\n\n'
+        self.doc += 'Commandes :\n'
+        self.doc += 'info : pour obtenir des informations sur les divers paramètres du programme\n\n'
+        self.doc += 'stop : pas besoin d\'explication. Pas d\'autre paramètre\n\n'
+        self.doc += 'logging : le niveau du logger.\n'
+        self.doc += '    CRITICAL 	50	ERROR 		40	WARNING 	30\n'
+        self.doc += '    INFO 		20	DEBUG 		10	NOTSET 		0\n\n'
+        self.doc += 'loghandler	: le niveau des loghandlers.\n'
+        self.doc += '    lancer d\'abord la commande "info" pour avoir la liste des handlers et\n'
+        self.doc += '    leurs caractéristiques.\n'
+        self.doc += '    Cette commande prend deux paramètres, le premier est le numéro de handler,\n'
+        self.doc += '    le deuxième est sa nouvelle valeur.\n\n'
+        self.doc += 'tempo1 : la valeur de la tempo de la boucle principale.\n'
+        self.doc += '    Le 3° paramètre est la valeur en secondes\n\n'
+        self.doc += 'tempo2, tempo3 : tempos dépendant de l\'appli.\n'
 
         return
 
@@ -477,6 +466,13 @@ def chrono_trace(fonction):
         return resultat
 
     return func_wrapper
+
+
+# -----------------------------------------------------------------------------------------------------------
+def expurge(texte, remplacement='¶'):
+    #   Pour pas être emmerdé aver les noms de fichiers à la con avec de l'unicode exotique.
+    #   Y'a pourtant des abrutis qui pour la simple apostrophe utilisent 'u\2051'...
+    return ''.join([texte[i] if ord(texte[i]) < 255 else remplacement for i in range(len(texte))])
 
 
 # -----------------------------------------------------------------------------------------------------------
