@@ -10,7 +10,7 @@ A decorator so see how much time is spent in a function
 ### expurge
 
 A function that replaces all unicode characters (> 255) in a string with a printable character (default ¶) to prevent raising an exception
-when attempting to print a text that contain some exotic unicode.
+when attempting to print a text that contains some exotic unicode.
 
 ### Recepteur
 
