@@ -4,6 +4,7 @@
 from datetime import datetime, timedelta
 import time
 
+import os
 import sys
 import socket
 import ast
@@ -465,6 +466,25 @@ def chrono_trace(fonction):
         print('Durée : %s\n' % (datetime.now() - debut))
         return resultat
 
+    return func_wrapper
+
+
+# -----------------------------------------------------------------------------------------------------------
+def conserver_dates(fonction):
+    """
+        Un petit décorateur pour pouvoir faire des modifs dans un fichier en conservant la date de dernière
+        modification originale.
+
+        Contrainte : le premier argument passé à la fonction doit être le nom du fichier à modifier.
+    """
+    def func_wrapper(*args, **kwargs):
+        nomfic = args[0]
+        dates_fichier = {'a': os.path.getatime(nomfic), 'm': os.path.getmtime(nomfic)}
+
+        resultat = fonction(*args, **kwargs)
+
+        os.utime(nomfic, (dates_fichier['a'], dates_fichier['m']))
+        return resultat
     return func_wrapper
 
 
