@@ -30,6 +30,14 @@ An example how to use Recepteur.
 
 A small command line utility to send data to Recepteur
 
+### vivant
+
+A small program that listens to a TCP port and responds. For communication tests, or just to be able to remotely check whether a machine is
+still alive. 
+
+I used to have it running on a probe on my internal network, with the appropriate port opened in the firewall, just to make sure
+from outside that the internet connection was OK.
+
 ## Dependencies
 * python 3 (developed and tested with python 3.4)
 * (some modules) gipkomail available [here] (https://github.com/Pepilepioux/server_stats/)
