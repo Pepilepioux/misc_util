@@ -372,9 +372,17 @@ class Recepteur:
         continuer = True
 
         while continuer:
-            client_socket, address = self.server_socket.accept()
-            self.server_socket.settimeout(0.0)
-            self.server_socket.settimeout(None)
+            try:
+                client_socket, address = self.server_socket.accept()
+            except Exception as e:
+                logger.error('Erreur client_socket, address = self.server_socket.accept() : %s' % e)
+
+            try:
+                self.server_socket.settimeout(0.0)
+                self.server_socket.settimeout(None)
+            except Exception as e:
+                logger.error('Erreur self.server_socket.settimeout : %s' % e)
+
             logger.info('%s Connexion reçue de %s' % (__name__, address[0]))
             data = 1
 
@@ -382,6 +390,7 @@ class Recepteur:
                 try:
                     data = client_socket.recv(512)
                 except:
+                    logger.error('Erreur data = client_socket.recv')
                     break
 
                 self.donneesrecues.append(data.decode())
