@@ -389,8 +389,8 @@ class Recepteur:
             while data:
                 try:
                     data = client_socket.recv(512)
-                except:
-                    logger.error('Erreur data = client_socket.recv')
+                except Exception as excpt:
+                    logger.error('Erreur data = client_socket.recv : %s ' % excpt)
                     break
 
                 self.donneesrecues.append(data.decode())
@@ -505,3 +505,20 @@ def expurge(texte, remplacement='¶'):
 
 
 # -----------------------------------------------------------------------------------------------------------
+def dateIsoVersTimestamp(date):
+    return datetime.strptime(date, '%Y-%m-%d %H:%M:%S').timestamp()
+
+
+# -----------------------------------------------------------------------------------------------------------
+def dateIsoVersTs(date):
+    return dateIsoVersTimestamp(date)
+
+
+# -----------------------------------------------------------------------------------------------------------
+def timestampVersDateIso(ts):
+    return datetime.strftime(datetime.fromtimestamp(ts), '%Y-%m-%d %H:%M:%S')
+
+
+# -----------------------------------------------------------------------------------------------------------
+def tsVersDateIso(ts):
+    return timestampVersDateIso(ts)
