@@ -463,16 +463,42 @@ class Recepteur:
 def chrono_trace(fonction):
     """
         Un petit décorateur pour voir le temps passé dans une fonction.
+
+        Évolution 2018-10-23 : on utilise la clé '__fichierLog__' de kwargs.
+            Si elle n'existe pas, les infos sont affichées par un 'print'
+            Si c'est un fichier (résultat d'un "open..."), on écrit les résultats
+                dans ce fichier
+            Si c'est une chaine de caractères, on considère que c'est un nom de fichier
+                et on écrit les résultats dans ce fichier ouvert en mode 'append'
     """
     def func_wrapper(*args, **kwargs):
+        def output(texte, **kwargs):
+            try:
+                fic = kwargs['__fichierLog__']
+                if type(fic) == _io.TextIOWrapper:
+                    fic.write('{0}\n'.format(texte))
+                else:
+                    if type(fic) == str:
+                        with open(fic, 'a') as f:
+                            f.write('{0}\n'.format(texte))
+                    else:
+                        print(texte)
+
+            except:
+                print(texte)
+
+
+
+        #   --------------------------------------------------
         debut = datetime.now()
-        print('\n##\t%s, entrée dans %s' % (debut.strftime('%H:%M:%S,%f'), fonction.__name__))
+        texte = '\n##\t%s, entrée dans %s' % (debut.strftime('%H:%M:%S,%f'), fonction.__name__)
+        output(texte, **kwargs)
 
         resultat = fonction(*args, **kwargs)
 
         fin = datetime.now()
-        print('\n##\t%s, sortie de %s' % (fin.strftime('%H:%M:%S,%f'), fonction.__name__))
-        print('Durée : %s\n' % (datetime.now() - debut))
+        texte = '\n##\t%s, sortie de %s\nDurée : %s\n' % (fin.strftime('%H:%M:%S,%f'), fonction.__name__, (datetime.now() - debut))
+        output(texte, **kwargs)
         return resultat
 
     return func_wrapper
