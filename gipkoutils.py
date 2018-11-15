@@ -15,6 +15,7 @@ import shlex
 import threading
 import inspect
 import traceback
+import _io
 
 donneesrecueslock = None
 fini = False
@@ -460,7 +461,7 @@ class Recepteur:
 
 
 # -----------------------------------------------------------------------------------------------------------
-def chrono_trace(fonction):
+def chrono_trace_V0(fonction):
     """
         Un petit décorateur pour voir le temps passé dans une fonction.
 
@@ -471,6 +472,9 @@ def chrono_trace(fonction):
             Si c'est une chaine de caractères, on considère que c'est un nom de fichier
                 et on écrit les résultats dans ce fichier ouvert en mode 'append'
     """
+    logger = logging.getLogger()
+
+
     def func_wrapper(*args, **kwargs):
         def output(texte, **kwargs):
             try:
@@ -482,12 +486,13 @@ def chrono_trace(fonction):
                         with open(fic, 'a') as f:
                             f.write('{0}\n'.format(texte))
                     else:
-                        print(texte)
+                        if type(fic) == logging.RootLogger:
+                            logger.info(texte)
+                        else:
+                            print(texte)
 
             except:
                 print(texte)
-
-
 
         #   --------------------------------------------------
         debut = datetime.now()
@@ -498,6 +503,60 @@ def chrono_trace(fonction):
 
         fin = datetime.now()
         texte = '\n##\t%s, sortie de %s\nDurée : %s\n' % (fin.strftime('%H:%M:%S,%f'), fonction.__name__, (datetime.now() - debut))
+        output(texte, **kwargs)
+        return resultat
+
+    return func_wrapper
+
+
+# -----------------------------------------------------------------------------------------------------------
+def chrono_trace(fonction):
+    """
+        Un petit décorateur pour voir le temps passé dans une fonction.
+
+        Évolution 2018-10-23 : on utilise la clé '__fichierLog__' de kwargs.
+            Si elle n'existe pas, les infos sont affichées par un 'print'
+            Si c'est un fichier (résultat d'un "open..."), on écrit les résultats
+                dans ce fichier
+            Si c'est une chaine de caractères, on considère que c'est un nom de fichier
+                et on écrit les résultats dans ce fichier ouvert en mode 'append'
+
+        Évolution 2018-11-15 :
+            la clé '__fichierLog__' de kwargs peut aussi être un logger.
+
+            Modification de la présentation : au lieu d'écrire une ligne au début, une ligne
+            avec l'heure de fin et une ligne pour la durée les 3 infos sont rassemblées sur une
+            seule ligne, écrite à la sortie de la fonction.
+    """
+    logger = logging.getLogger()
+
+
+    def func_wrapper(*args, **kwargs):
+        def output(texte, **kwargs):
+            try:
+                fic = kwargs['__fichierLog__']
+                if type(fic) == _io.TextIOWrapper:
+                    fic.write('{0}\n'.format(texte))
+                else:
+                    if type(fic) == str:
+                        with open(fic, 'a') as f:
+                            f.write('{0}\n'.format(texte))
+                    else:
+                        if type(fic) == logging.RootLogger:
+                            logger.info(texte)
+                        else:
+                            print(texte)
+
+            except:
+                print(texte)
+
+
+        #   --------------------------------------------------
+        debut = datetime.now()
+        resultat = fonction(*args, **kwargs)
+        fin = datetime.now()
+
+        texte = '{0}, entrée à {1}, sortie à {2}, durée : {3}'.format(fonction.__name__, debut.strftime('%H:%M:%S,%f'), fin.strftime('%H:%M:%S,%f'), (fin - debut))
         output(texte, **kwargs)
         return resultat
 
