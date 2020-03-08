@@ -38,8 +38,18 @@ still alive.
 I used to have it running on a probe on my internal network, with the appropriate port opened in the firewall, just to make sure
 from outside that the internet connection was OK.
 
+### gipkoexif
+
+Some functions to retrieve exif data from a photo file, especially the GPS coordinates.
+
+### gipkogps
+
+Miscelaneaous functions to handle gps data, tracks, calculate distances...
+
 ## Dependencies
 * python 3 (developed and tested with python 3.4)
+* Pillow (gipkoexif)
+* xml, numpy (gipkogps)
 * (some modules) gipkomail available [here] (https://github.com/Pepilepioux/server_stats/)
 
 
