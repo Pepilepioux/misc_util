@@ -7,6 +7,8 @@
     Dépendance : pip install Pillow
 """
 
+import datetime
+
 from PIL import Image
 from PIL.ExifTags import TAGS, GPSTAGS
 
@@ -15,7 +17,6 @@ def get_exif_data(image):
     """Returns a dictionary from the exif data of an PIL Image item. Also converts the GPS Tags"""
     exif_data = {}
     info = image._getexif()
-    #   print(info)
     if info:
         for tag, value in info.items():
             #   print('{0} : {1}'.format(tag, value))
@@ -85,3 +86,11 @@ def get_lat_lon(exif_data):
                 lon = 0 - lon
 
     return lat, lon
+
+
+#   ------------------------------------------------------------------------------------------------
+def coordonnees(nomFic):
+    image = Image.open(nomFic)
+    exif_data = get_exif_data(image)
+    coord = get_lat_lon(exif_data)
+    return coord

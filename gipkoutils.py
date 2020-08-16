@@ -16,12 +16,7 @@ import threading
 import inspect
 import traceback
 import _io
-
-donneesrecueslock = None
-fini = False
-tempo1 = None
-tempo2 = None
-tempo3 = None
+import globalvars
 
 
 # -----------------------------------------------------------------------------------------------------------
@@ -29,6 +24,13 @@ class Recepteur:
     """
         Se met à l'écoute en tcp sur le port passé en paramètre et exécute un traitement en fonction
         des instructions reçues.
+
+        Prend deux arguments :
+            1 - obligatoire
+                un kwarg nommé 'vars' qui est une classe contenant au moins les variables tempo1 (float),
+                fini (boolean), et donnees_recues_lock (threading.RLock)
+            2 - facultatif
+                une fonction qui fera un traitement spécifique sur le message reçu.
 
         Il y a des traitements de base intégrés, comme l'ordre d'arrêt ou le renvoi d'informations.
 
@@ -63,7 +65,7 @@ class Recepteur:
         return ''
 
     # -----------------------------------------------------------------------------------------------------------
-    def __init__(self, portEcoute, *, traitement=trt):
+    def __init__(self, portEcoute, *, traitement=trt, Vars_appelant=None):
         logger = logging.getLogger()
         self.portEcoute = portEcoute
         self.donneesrecues = []
@@ -93,232 +95,241 @@ class Recepteur:
         return
 
     # -----------------------------------------------------------------------------------------------------------
-    def __trtStandard__(self, msgRecu):
+    def __verif_message__(self, msgRecu, Vars_appelant):
+        #   logger = logging.getLogger()
+        globalvars.logger.debug('Entrée dans __verif_message__\n\n')
+        reponse = ''
+
+        # Le gars paumé qui sait pas ce qu'il faut faire...
+        if len(msgRecu) >= 1 and msgRecu[0] == '?':
+            globalvars.logger.debug('Ligne %s, len(msgRecu) >= 1 and msgRecu[0] == ?', inspect.getframeinfo(inspect.currentframe())[1])
+            reponse = self.doc
+
+        if len(msgRecu) >= 1 and msgRecu[0].lower() == "t'es qui, toi ?":
+            globalvars.logger.debug('Ligne %s, len(msgRecu) >= 1 and msgRecu[0].lower() == "t\'es qui, toi ?"', inspect.getframeinfo(inspect.currentframe())[1])
+            reponse = self.moi
+
+        if reponse == '' and len(msgRecu) >= 1 and msgRecu[0] != self.moi:
+            globalvars.logger.debug('Ligne %s, reponse == \'\' and len(msgRecu) >= 1 and msgRecu[0] != self.moi', inspect.getframeinfo(inspect.currentframe())[1])
+            reponse = '{0} : c\'est pas pour moi.'.format(msgRecu[0])
+
+        if reponse == '' and len(msgRecu) < 2:
+            globalvars.logger.debug('Ligne %s, reponse == \'\' and len(msgRecu) < 2', inspect.getframeinfo(inspect.currentframe())[1])
+            reponse = 'Pas assez d\'arguments'
+
+        globalvars.logger.debug('Ligne {0}, sortie vérif message = "{1}"'.format(inspect.getframeinfo(inspect.currentframe())[1], '"' + reponse + '"'))
+        return reponse
+
+    # -----------------------------------------------------------------------------------------------------------
+    def __trtStandard__(self, msgRecu, Vars_appelant):
         """
             Les messages standard sont des listes dont le premier élément est le nom du programme
             (self.moi), le deuxième une instruction et le 3° une valeur.
             Si c'est une liste à moins de 2 éléments on laisse tomber.
             Et si le 1° élément de la liste n'est pas "moi", on laisse tomber aussi.
         """
-        global donneesrecueslock
-        global fini
-        global tempo1
-        global tempo2
-        global tempo3
 
-        logger = logging.getLogger()
-        reponse = ''
-        logger.debug('__trtStandard__, msgRecu = %s', msgRecu)
+        #   logger = logging.getLogger()
+        globalvars.logger.debug('__trtStandard__, msgRecu = %s', msgRecu)
 
-        # Le gars paumé qui sait pas ce qu'il faut faire...
-        if len(msgRecu) >= 1 and msgRecu[0] == '?':
-            return self.doc
-
-        if len(msgRecu) >= 1 and msgRecu[0].lower() == "t'es qui, toi ?":
-            reponse = self.moi
-            return reponse
-
-        if len(msgRecu) < 2 or msgRecu[0] != self.moi:
-            return reponse
+        reponse = self.__verif_message__(msgRecu, Vars_appelant)
+        globalvars.logger.debug('Ligne %s, après vérif message, réponse :', inspect.getframeinfo(inspect.currentframe())[1])
+        globalvars.logger.debug(reponse)
 
         # Maintenant on a un message qui a la bonne structure.
-        if msgRecu[1].lower() == 'stop':
-            # C'est un ordre d'arrêt
-            logger.debug('%s Reçu un ordre d\'arrêt', __name__)
+        if reponse == '':
+            if msgRecu[1].lower() == 'stop':
+                # C'est un ordre d'arrêt
+                globalvars.logger.debug('%s Reçu un ordre d\'arrêt', __name__)
 
-            logger.debug('Ligne %s, demande lock', inspect.getframeinfo(inspect.currentframe())[1])
-            try:
-                donneesrecueslock.acquire()
-                #   self.lock.acquire()
-                logger.debug('Ligne %s, lock obtenu', inspect.getframeinfo(inspect.currentframe())[1])
-            except:
-                logger.warning('Attention, pas de verrou disponible. Il est souhaitable d\'utiliser "donneesrecueslock" pour éviter les problèmes')
+                globalvars.logger.debug('Ligne %s, demande lock', inspect.getframeinfo(inspect.currentframe())[1])
+                try:
+                    Vars_appelant.donnees_recues_lock.acquire()
+                    #   self.lock.acquire()
+                    globalvars.logger.debug('Ligne %s, lock obtenu', inspect.getframeinfo(inspect.currentframe())[1])
+                except Exception as e:
+                    globalvars.logger.warning('Attention, pas de verrou disponible. Il est souhaitable d\'utiliser "Vars_appelant.donnees_recues_lock" pour éviter les problèmes')
 
-            fini = True
-            logger.debug('Ligne %s, ordre relâche lock', inspect.getframeinfo(inspect.currentframe())[1])
-            try:
-                donneesrecueslock.release()
-                #   self.lock.release()
-                logger.debug('Ligne %s, lock relâché', inspect.getframeinfo(inspect.currentframe())[1])
-            except:
-                pass
-            logger.debug('%s fini = %s' % (__name__, fini))
+                Vars_appelant.fini = True
+                globalvars.logger.debug('Ligne %s, ordre relâche lock', inspect.getframeinfo(inspect.currentframe())[1])
+                try:
+                    Vars_appelant.donnees_recues_lock.release()
+                    #   self.lock.release()
+                    globalvars.logger.debug('Ligne %s, lock relâché', inspect.getframeinfo(inspect.currentframe())[1])
+                except Exception as e:
+                    pass
+                globalvars.logger.debug('%s fini = %s' % (__name__, Vars_appelant.fini))
 
-            reponse = 'stop'
-            return reponse
+                reponse = 'stop'
+                return reponse
 
-        if msgRecu[1] == '?':
-            reponse = self.doc + self.traitement(msgRecu)
-            return reponse
+            if msgRecu[1] == '?':
+                globalvars.logger.debug('Ligne %s, appel self.traitement(msgRecu)', inspect.getframeinfo(inspect.currentframe())[1])
+                reponse = self.doc + self.traitement(msgRecu)
+                return reponse
 
-        if msgRecu[1] == 'info':
-            if tempo1 is not None:
-                reponse = 'Tempo 1 : %s' % tempo1
-            else:
-                reponse = ''
-
-            if tempo2 is not None:
-                reponse += '\nTempo 2 : %s' % tempo2
-
-            if tempo3 is not None:
-                reponse += '\nTempo 3 : %s' % tempo3
-
-            reponse += '\nlogging : '
-            if logger.hasHandlers():
-                reponse += str(logger.level)
-            else:
-                reponse += 'Inactif'
-
-            reponse += '\nloghandler : '
-            if logger.hasHandlers():
-                reponse += str(logger.handlers[0].level)
-            else:
-                reponse += 'Inactif'
-
-            """
-            reponse += '\nversion : '
-            if version is not None:
-                reponse += str(version)
-            else :
-                reponse += 'Pas définie'
-            """
-
-            # Le programme utilisateur peut avoir lui aussi ses propres infos à communiquer
-            reponse2 = self.traitement(msgRecu)
-
-            if reponse2 != '':
-                reponse += '\n' + reponse2
-
-            return reponse
-
-        if msgRecu[1].lower() == 'logging':
-            if len(msgRecu) >= 3:
-                if msgRecu[2].isdecimal():
-                    if logger.hasHandlers():
-                        #   logger.setLevel(int(msgRecu[2]))
-                        logger.handlers[0].setLevel(int(msgRecu[2]))
-                        reponse = 'OK, nouveau niveau de logging = ' + str(logger.handlers[0].level)
-                        logger.info('%s Nouveau niveau log : %d' % (__name__, logger.handlers[0].level))
-                    else:
-                        reponse = 'Logger inactif'
+            if msgRecu[1] == 'info':
+                if Vars_appelant.tempo1 is not None:
+                    reponse = 'Tempo 1 : %s' % Vars_appelant.tempo1
                 else:
-                    reponse = 'Valeur incorrecte, %s' % msgRecu[2]
-            else:
-                reponse = 'Il manque le 3° paramètre (valeur)'
-            return reponse
+                    reponse = ''
 
-        """
-        if msgRecu[1].lower() == 'loghandler':
-            if len(msgRecu)>= 3:
-                if msgRecu[2].isdecimal():
-                    if logger.hasHandlers():
-                        logger.handlers[0].setLevel(int(msgRecu[2]))
-                        reponse = 'OK, nouveau niveau de debug pour logger.handlers[0] = ' + str(logger.handlers[0].level)
-                        logger.info('%s Nouveau niveau logger.handlers[0] : %d' % (__name__, logger.handlers[0].level))
-                    else:
-                        reponse = 'Logger inactif'
+                try:
+                    if Vars_appelant.tempo2 is not None:
+                        reponse += '\nTempo 2 : %s' % Vars_appelant.tempo2
+                except Exception as e:
+                    pass
+
+                try:
+                    if Vars_appelant.tempo3 is not None:
+                        reponse += '\nTempo 3 : %s' % Vars_appelant.tempo3
+                except Exception as e:
+                    pass
+
+                reponse += '\nlogging : '
+                if globalvars.logger.hasHandlers():
+                    reponse += str(globalvars.logger.level)
                 else:
-                    reponse = 'Valeur incorrecte, %s' % msgRecu[2]
-            else:
-                reponse = 'Il manque le 3° paramètre (valeur)'
-            return reponse
-        """
+                    reponse += 'Inactif'
 
-        if msgRecu[1].lower() == 'tempo1':
-            if len(msgRecu) >= 3:
-                if msgRecu[2].isdecimal():
-                    logger.debug('Ligne %s, demande lock', inspect.getframeinfo(inspect.currentframe())[1])
-                    try:
-                        donneesrecueslock.acquire()
-                        logger.debug('Ligne %s, lock obtenu', inspect.getframeinfo(inspect.currentframe())[1])
-                    except:
-                        logger.warning('Attention, pas de verrou disponible. Il est souhaitable d\'utiliser "donneesrecueslock" pour éviter les problèmes')
-
-                    tempo1 = float(msgRecu[2])
-                    logger.debug('Ligne %s, ordre relâche lock', inspect.getframeinfo(inspect.currentframe())[1])
-                    try:
-                        donneesrecueslock.release()
-                        logger.debug('Ligne %s, lock relâché', inspect.getframeinfo(inspect.currentframe())[1])
-                    except:
-                        pass
-
-                    reponse = 'OK, nouvelle tempo 1 = ' + str(tempo1)
-
-                    logger.info('%s Nouvelle tempo 1 : %d' % (__name__, tempo1))
+                reponse += '\nloghandler : '
+                if globalvars.logger.hasHandlers():
+                    reponse += str(globalvars.logger.handlers[0].level)
                 else:
-                    reponse = 'Valeur incorrecte, %s' % msgRecu[2]
-            else:
-                reponse = 'Il manque le 3° paramètre (valeur)'
-            return reponse
+                    reponse += 'Inactif'
 
-        if msgRecu[1].lower() == 'tempo2':
-            if len(msgRecu) >= 3:
-                if msgRecu[2].isdecimal():
-                    if tempo2 is None:
-                        reponse = 'tempo 2 n\'est pas utilisée '
+                """
+                reponse += '\nversion : '
+                if version is not None:
+                    reponse += str(version)
+                else :
+                    reponse += 'Pas définie'
+                """
+
+                # Le programme utilisateur peut avoir lui aussi ses propres infos à communiquer
+                globalvars.logger.debug('Ligne %s, reponse2 = self.traitement(msgRecu)', inspect.getframeinfo(inspect.currentframe())[1])
+                reponse2 = self.traitement(msgRecu)
+
+                if reponse2 != '':
+                    reponse += '\n' + reponse2
+
+                return reponse
+
+            if msgRecu[1].lower() == 'logging':
+                if len(msgRecu) >= 3:
+                    if msgRecu[2].isdecimal():
+                        if globalvars.logger.hasHandlers():
+                            #   logger.setLevel(int(msgRecu[2]))
+                            globalvars.logger.setLevel(int(msgRecu[2]))
+                            globalvars.logger.handlers[0].setLevel(int(msgRecu[2]))
+                            try:
+                                globalvars.logger.handlers[1].setLevel(int(msgRecu[2]))
+                                reponse = 'OK, nouveau niveau de logging = ' + str(globalvars.logger.handlers[0].level)
+                                globalvars.logger.info('%s Nouveau niveau log : %d' % (__name__, globalvars.logger.handlers[0].level))
+                            except Exception as e:
+                                globalvars.logger.warning('Il n\'y a pas de logger.handler[1]')
+                        else:
+                            reponse = 'Logger inactif'
                     else:
-                        logger.debug('Ligne %s, demande lock', inspect.getframeinfo(inspect.currentframe())[1])
+                        reponse = 'Valeur incorrecte, %s' % msgRecu[2]
+                else:
+                    reponse = 'Il manque le 3° paramètre (valeur)'
+                return reponse
+
+            if msgRecu[1].lower() == 'tempo1':
+                if len(msgRecu) >= 3:
+                    if msgRecu[2].isdecimal():
+                        globalvars.logger.debug('Ligne %s, demande lock', inspect.getframeinfo(inspect.currentframe())[1])
                         try:
-                            donneesrecueslock.acquire()
-                            logger.debug('Ligne %s, lock obtenu', inspect.getframeinfo(inspect.currentframe())[1])
-                        except:
-                            logger.warning('Attention, pas de verrou disponible. Il est souhaitable d\'utiliser "donneesrecueslock" pour éviter les problèmes')
+                            Vars_appelant.donnees_recues_lock.acquire()
+                            globalvars.logger.debug('Ligne %s, lock obtenu', inspect.getframeinfo(inspect.currentframe())[1])
+                        except Exception as e:
+                            globalvars.logger.warning('Attention, pas de verrou disponible. Il est souhaitable d\'utiliser "Vars_appelant.donnees_recues_lock" pour éviter les problèmes')
 
-                        tempo2 = float(msgRecu[2])
-                        logger.debug('Ligne %s, ordre relâche lock', inspect.getframeinfo(inspect.currentframe())[1])
+                        Vars_appelant.tempo1 = float(msgRecu[2])
+                        globalvars.logger.debug('Ligne %s, ordre relâche lock', inspect.getframeinfo(inspect.currentframe())[1])
                         try:
-                            donneesrecueslock.release()
-                            logger.debug('Ligne %s, lock relâché', inspect.getframeinfo(inspect.currentframe())[1])
-                        except:
+                            Vars_appelant.donnees_recues_lock.release()
+                            globalvars.logger.debug('Ligne %s, lock relâché', inspect.getframeinfo(inspect.currentframe())[1])
+                        except Exception as e:
                             pass
 
-                        reponse = 'OK, nouvelle tempo 2 = ' + str(tempo2)
+                        reponse = 'OK, nouvelle tempo 1 = ' + str(Vars_appelant.tempo1)
 
-                        logger.info('%s Nouvelle tempo 2 : %d' % (__name__, tempo2))
-                else:
-                    reponse = 'Valeur incorrecte, %s' % msgRecu[2]
-            else:
-                reponse = 'Il manque le 3° paramètre (valeur)'
-            return reponse
-
-        if msgRecu[1].lower() == 'tempo3':
-            if len(msgRecu) >= 3:
-                if msgRecu[2].isdecimal():
-                    if tempo3 is None:
-                        reponse = 'tempo 3 n\'est pas utilisée '
+                        globalvars.logger.info('%s Nouvelle tempo 1 : %d' % (__name__, Vars_appelant.tempo1))
                     else:
-                        logger.debug('Ligne %s, demande lock', inspect.getframeinfo(inspect.currentframe())[1])
-                        try:
-                            donneesrecueslock.acquire()
-                            logger.debug('Ligne %s, lock obtenu', inspect.getframeinfo(inspect.currentframe())[1])
-                        except:
-                            logger.warning('Attention, pas de verrou disponible. Il est souhaitable d\'utiliser "donneesrecueslock" pour éviter les problèmes')
+                        reponse = 'Valeur incorrecte, %s' % msgRecu[2]
+                else:
+                    reponse = 'Il manque le 3° paramètre (valeur)'
+                return reponse
 
-                        tempo3 = float(msgRecu[2])
-                        logger.debug('Ligne %s, ordre relâche lock', inspect.getframeinfo(inspect.currentframe())[1])
+            if msgRecu[1].lower() == 'tempo2':
+                if len(msgRecu) >= 3:
+                    if msgRecu[2].isdecimal():
+                        globalvars.logger.debug('Ligne %s, demande lock', inspect.getframeinfo(inspect.currentframe())[1])
                         try:
-                            donneesrecueslock.release()
-                            logger.debug('Ligne %s, lock relâché', inspect.getframeinfo(inspect.currentframe())[1])
-                        except:
+                            Vars_appelant.donnees_recues_lock.acquire()
+                            globalvars.logger.debug('Ligne %s, lock obtenu', inspect.getframeinfo(inspect.currentframe())[1])
+                        except Exception as e:
+                            globalvars.logger.warning('Attention, pas de verrou disponible. Il est souhaitable d\'utiliser "Vars_appelant.donnees_recues_lock" pour éviter les problèmes')
+
+                        try:
+                            Vars_appelant.tempo2 = float(msgRecu[2])
+                            reponse = 'OK, nouvelle tempo 2 = ' + str(Vars_appelant.tempo2)
+                        except Exception as e:
+                            reponse = 'tempo 2 n\'est pas utilisée '
+
+                        globalvars.logger.debug('Ligne %s, ordre relâche lock', inspect.getframeinfo(inspect.currentframe())[1])
+                        try:
+                            Vars_appelant.donnees_recues_lock.release()
+                            globalvars.logger.debug('Ligne %s, lock relâché', inspect.getframeinfo(inspect.currentframe())[1])
+                        except Exception as e:
                             pass
 
-                        reponse = 'OK, nouvelle tempo 3 = ' + str(tempo3)
-
-                        logger.info('%s Nouvelle tempo 3 : %d' % (__name__, tempo3))
+                        globalvars.logger.info('%s Nouvelle tempo 2 : %d' % (__name__, Vars_appelant.tempo2))
+                    else:
+                        reponse = 'Valeur incorrecte, %s' % msgRecu[2]
                 else:
-                    reponse = 'Valeur incorrecte, %s' % msgRecu[2]
-            else:
-                reponse = 'Il manque le 3° paramètre (valeur)'
-            return reponse
+                    reponse = 'Il manque le 3° paramètre (valeur)'
+                return reponse
+
+            if msgRecu[1].lower() == 'tempo3':
+                if len(msgRecu) >= 3:
+                    if msgRecu[2].isdecimal():
+                        globalvars.logger.debug('Ligne %s, demande lock', inspect.getframeinfo(inspect.currentframe())[1])
+                        try:
+                            Vars_appelant.donnees_recues_lock.acquire()
+                            globalvars.logger.debug('Ligne %s, lock obtenu', inspect.getframeinfo(inspect.currentframe())[1])
+                        except Exception as e:
+                            globalvars.logger.warning('Attention, pas de verrou disponible. Il est souhaitable d\'utiliser "Vars_appelant.donnees_recues_lock" pour éviter les problèmes')
+
+                        try:
+                            Vars_appelant.tempo3 = float(msgRecu[2])
+                            reponse = 'OK, nouvelle tempo 2 = ' + str(Vars_appelant.tempo3)
+                        except Exception as e:
+                            reponse = 'tempo 3 n\'est pas utilisée '
+
+                        globalvars.logger.debug('Ligne %s, ordre relâche lock', inspect.getframeinfo(inspect.currentframe())[1])
+                        try:
+                            Vars_appelant.donnees_recues_lock.release()
+                            globalvars.logger.debug('Ligne %s, lock relâché', inspect.getframeinfo(inspect.currentframe())[1])
+                        except Exception as e:
+                            pass
+
+                        globalvars.logger.info('%s Nouvelle tempo 2 : %d' % (__name__, Vars_appelant.tempo3))
+                    else:
+                        reponse = 'Valeur incorrecte, %s' % msgRecu[2]
+                else:
+                    reponse = 'Il manque le 3° paramètre (valeur)'
+                return reponse
 
         return reponse
 
     # -----------------------------------------------------------------------------------
 
-    def __call__(self):
+    def __call__(self, **kwargs):
         """
             À COMPLÉTER !
-
 
             Version 2: Si le traitement standard intégré n'a pas pu traiter le message, il le passe à un
             module de traitement passé par le programme appelant. Ça permet de personnaliser le traitement.
@@ -355,20 +366,14 @@ class Recepteur:
                         else:
                             #sleep for sometime to indicate a gap
                             time.sleep(0.1)
-                    except:
+                    except Exception as e:
                         pass
 
                 #join all parts to make final string
                 return ''.join(total_data)
 
         """
-        global donneesrecueslock
-        global fini
-        global tempo1
-        global tempo2
-        global tempo3
 
-        logger = logging.getLogger()
         self.server_socket.listen(5)
         continuer = True
 
@@ -376,63 +381,63 @@ class Recepteur:
             try:
                 client_socket, address = self.server_socket.accept()
             except Exception as e:
-                logger.error('Erreur client_socket, address = self.server_socket.accept() : %s' % e)
+                globalvars.logger.error('Erreur client_socket, address = self.server_socket.accept() : %s' % e)
 
             try:
                 self.server_socket.settimeout(0.0)
                 self.server_socket.settimeout(None)
             except Exception as e:
-                logger.error('Erreur self.server_socket.settimeout : %s' % e)
+                globalvars.logger.error('Erreur self.server_socket.settimeout : %s' % e)
 
-            logger.info('%s Connexion reçue de %s' % (__name__, address[0]))
+            globalvars.logger.info('%s Connexion reçue de %s' % (__name__, address[0]))
             data = 1
 
             while data:
                 try:
                     data = client_socket.recv(512)
                 except Exception as excpt:
-                    logger.error('Erreur data = client_socket.recv : %s ' % excpt)
+                    globalvars.logger.error('Erreur data = client_socket.recv : %s ' % excpt)
                     break
 
                 self.donneesrecues.append(data.decode())
                 donneesatraiter = self.donneesrecues.pop(0)
-                logger.debug('%s Données reçues : %s' % (__name__, donneesatraiter))
+                globalvars.logger.debug('%s Données reçues : %s' % (__name__, donneesatraiter))
 
                 if donneesatraiter != '':
                     try:
                         v = shlex.split(donneesatraiter)
-                    except:
+                    except Exception as e:
                         v = None
+                        globalvars.logger.debug('Ligne %s, except du shlex', inspect.getframeinfo(inspect.currentframe())[1])
                         reponse = 'Désolé, j\'ai pas compris...'
 
                 if v is not None:
-                    reponse = self.__trtStandard__(v)
-                    logger.debug('%s Réponse de self.__trtStandard__ : %s', __name__, reponse)
+                    reponse = self.__trtStandard__(v, kwargs['vars'])
+                    globalvars.logger.debug('%s Réponse de self.__trtStandard__ : %s\n', __name__, '"' + reponse + '"')
 
                     if reponse == 'stop':
                         r = 'OK, capito, je m\'arrête'
                         client_socket.send(r.encode())
-                        # On peut aussi prévenir le client...
-                        reponse = self.traitement(v)
                         break
 
                     if reponse == '':
                         # Le traitement standard n'a pas traité le message.
                         # On le passe donc au programme passé en paramètre
+                        globalvars.logger.debug('Ligne %s, appel self.traitement(msgRecu) parce que le traitement standard n\'a pas traité le message.', inspect.getframeinfo(inspect.currentframe())[1])
                         reponse = self.traitement(v)
 
                 if reponse == '':
-                    logger.info('%s Reçu ça : %s. Je sais pas quoi en faire.' % (__name__, donneesatraiter))
+                    globalvars.logger.info('%s Reçu ça : %s. Je sais pas quoi en faire.' % (__name__, donneesatraiter))
                     reponse = 'Désolé, j\'ai pas compris...'
 
                 try:
                     # Ben oui, si l'émetteur coupe la connexion avant qu'on ne réponde, ça plante.
-                    client_socket.send(reponse.encode())
+                    envoyes = client_socket.send(reponse.encode())
                 except Exception as e:
-                    print('Ouh, j\'ai bien fait de mettre un try !')
+                    globalvars.logger.warning('Ouh, j\'ai bien fait de mettre un try !')
                     pass
 
-            continuer = not(fini)
+            continuer = not(kwargs['vars'].fini)
             self.server_socket.settimeout(None)
 
         client_socket.close()
@@ -440,23 +445,21 @@ class Recepteur:
 
     # -----------------------------------------------------------------------------
     def __del___(self):
-        print('Rhââââh, je meurs...')
-        logger.info('%s : Reçu l\'ordre de sabordage.', __name__)
+        globalvars.logger.info('%s : Reçu l\'ordre de sabordage.', __name__)
 
     # -----------------------------------------------------------------------------
     def apoptose(self):
         #   https://fr.wikipedia.org/wiki/Apoptose
-        global fini
 
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_socket.connect(('localhost', self.portEcoute))
-        fini = True
+        kwargs['vars'].fini = True
         data = '%s stop' % self.moi
         client_socket.send(data.encode())
 
         try:
             client_socket.close()
-        except:
+        except Exception as e:
             pass
 
 
@@ -474,7 +477,6 @@ def chrono_trace_V0(fonction):
     """
     logger = logging.getLogger()
 
-
     def func_wrapper(*args, **kwargs):
         def output(texte, **kwargs):
             try:
@@ -491,7 +493,7 @@ def chrono_trace_V0(fonction):
                         else:
                             print(texte)
 
-            except:
+            except Exception as e:
                 print(texte)
 
         #   --------------------------------------------------
@@ -530,7 +532,6 @@ def chrono_trace(fonction):
     """
     logger = logging.getLogger()
 
-
     def func_wrapper(*args, **kwargs):
         def output(texte, **kwargs):
             try:
@@ -547,9 +548,8 @@ def chrono_trace(fonction):
                         else:
                             print(texte)
 
-            except:
+            except Exception as e:
                 print(texte)
-
 
         #   --------------------------------------------------
         debut = datetime.now()

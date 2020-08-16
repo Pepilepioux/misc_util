@@ -1,4 +1,5 @@
 #!/usr/bin/python
+#!/usr/bin/python
 # -*- coding: UTF-8 -*-
 
 """
@@ -59,6 +60,17 @@ class PointGPS(tuple):
         print('L = %s, l = %s, z = %s. R = %s\nX = %s Y= %s Z = %s' % (self.latDeg, self.lonDeg, self.alt, self.R, self.X, self.Y, self.Z))
 
 
+# -----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+def tracer(fonction):
+    logger = logging.getLogger()
+    def func_wrapper(*args, **kwargs):
+        logging.debug('Entrée {0}, args = {1}, kwargs = {2}'.format(fonction.__name__, args, kwargs))
+
+        resultat = fonction(*args, **kwargs)
+        logging.debug('Sortie {0}, args = {1}, kwargs = {2}'.format(fonction.__name__, args, kwargs))
+        return resultat
+    
+    return func_wrapper
 # -----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def rayonTerre(latitude, radians=False):
     """
@@ -161,11 +173,13 @@ def chercherTraces_V0(nomRepBase, latitude, longitude, delta, majBounds):
 
 
 # -----------------------------------------------------------------------------------------------------------------------------------------------------------
-def chercherTracesProches(nomRepBase, ptRef, dMax):
+@tracer
+def chercherTracesProches(nomRepBase, ptRef, dMax, *, ignorer_altitude=True):
     """
         Renvoie la liste de tous les fichiers gpx de l'arborescence nomRepBase correspondant à une trace
         qui passe à moins de delta km du point (latitude, longitude)
     """
+    logging.info('chercherTracesProches({0}, {1}, {2}, {3})'.format(nomRepBase, ptRef, dMax, ignorer_altitude))
     listeFichiers = []
 
     for D, dirs, fics in os.walk(nomRepBase):
@@ -175,17 +189,17 @@ def chercherTracesProches(nomRepBase, ptRef, dMax):
                 continue
 
             nomComplet = os.path.join(D, fic)
-            try:
-                logging.debug('On traite {0}'.format(nomComplet))
-                listePts = extrairePoints(nomComplet)
-                #   print('\nOn teste {0}'.format(nomComplet))
-                if traceProche(listePts, ptRef, dMax):
-                    #   print('C\'est bon')
-                    listeFichiers.append(nomComplet)
-                #   else:
-                #       print('Raté, d = {0:2.5f}'.format(distancePointTrace(listePts, ptRef)[0]))
-            except Exception as e:
-                print('\tFichier {0} : y\'a un chni : {1}'.format(nomComplet, e))
+            #   try:
+            logging.info('On traite {0}'.format(nomComplet))
+            listePts = extrairePoints(nomComplet)
+            #   print('\nOn teste {0}'.format(nomComplet))
+            if traceProche(listePts, ptRef, dMax, ignorer_altitude=ignorer_altitude, sliceStart=None, sliceEnd=None, echantillons=20):
+                #   print('C\'est bon')
+                listeFichiers.append(nomComplet)
+            #   else:
+            #       print('Raté, d = {0:2.5f}'.format(distancePointTrace(listePts, ptRef)[0]))
+            #   except Exception as e:
+            #       logging.error('\tFichier {0} : y\'a un chni : {1}'.format(nomComplet, e))
 
     return listeFichiers
 
@@ -225,8 +239,8 @@ def resumerTraces(nomRepBase, fichierSortie, separateur=';'):
             listePts = extrairePoints(fic)
             listeValeurs = [fic, locale.format('%d',len(listePts))]
             for i in range(1,4):
-                listeValeurs.append(locale.format('%.3f', distanceP(listePts[0], listePts[int(len(listePts) * i / 4)])))
-            listeValeurs.append(locale.format('%.3f', distanceP(listePts[0], listePts[-1])))
+                listeValeurs.append(locale.format('%.3f', distanceP(listePts[0], listePts[int(len(listePts) * i / 4)], km=False)))
+            listeValeurs.append(locale.format('%.3f', distanceP(listePts[0], listePts[-1], km=False)))
             listeResultats.append(separateur.join(listeValeurs))
         except Exception as e:
             print('\tOups ! {0}'.format(e))
@@ -315,17 +329,17 @@ def extrairePoints(nomFic):
 
 
 # -----------------------------------------------------------------------------------------------------------------------------------------------------------
-def traceProcheBourrin(trk: list, ptRef: tuple, dMax: float):
+def traceProcheBourrin(trk: list, ptRef: tuple, dMax: float, *, ignorer_altitude=True):
     """
         Détermine si dans la liste de points trk il y en a au moins un qui est à
-        moins de dMax km du point ptRef.
+        moins de dMax m du point ptRef.
         Par la méthode bourrin, c'est à dire qu'on calcule la distance de ptRef à tous les points
         de la liste.
     """
     i = 0
     trouve = False
     while i < len(trk):
-        dist = distanceP(trk[i], ptRef)
+        dist = distanceP(trk[i], ptRef, ignorer_altitude=ignorer_altitude)
         #   print('Point {0}. On est à {1} km.'.format(i, dist))
         if dist <= dMax:
             #   print('bingo ! Après {0} essais'.format(nbEssais))
@@ -389,9 +403,9 @@ def traceProche_V0(trk: list, ptRef: tuple, dMax: float, echantillons=20):
 
             ltemp = ldist[:2]
             ltemp.sort()    #   Bin oui, on n'est pas sûr que le point le plus proche soit, dans la trace, avant le suivant...
-            if any(e.level <= logging.DEBUG for e in logger.handlers):
-                for e in ldist[:4]:
-                    print(e)
+            #   if any(e.level <= logging.DEBUG for e in logger.handlers):
+            #       for e in ldist[:4]:
+            #           print(e)
 
             i1 = max(ltemp[0][0] - 1, 0)
             i2 = min(ltemp[1][0] + 1, len(lEch) - 1)
@@ -409,13 +423,15 @@ def traceProche_V0(trk: list, ptRef: tuple, dMax: float, echantillons=20):
             else:
                 logging.debug('La liste a {0} points'.format(len(trk)))
                 logging.debug('On récurse entre les points {0} et {1}'.format(lEch[i1], lEch[i2]))
+                #   traceProche(listePts, ptRef, dMax, ignorer_altitude=ignorer_altitude, sliceStart=None, sliceEnd=None, echantillons=20)
                 proche = traceProche(trk[lEch[i1]:lEch[i2]], ptRef, dMax, echantillons=echantillons)
 
     return proche
 
 
 # -----------------------------------------------------------------------------------------------------------------------------------------------------------
-def traceProche(traceComplete: list, ptRef: tuple, dMax, sliceStart=None, sliceEnd=None, echantillons=20):
+@tracer
+def traceProche(traceComplete: list, ptRef: tuple, dMax, *, ignorer_altitude=True, sliceStart=None, sliceEnd=None, echantillons=20):
     """
         Renvoie la distance entre un point donné et une trace (C'est la distance minimale entre
         ce point et tous les points de la traceComplete) et les informations sur le point de la traceComplete le plus proche
@@ -440,39 +456,39 @@ def traceProche(traceComplete: list, ptRef: tuple, dMax, sliceStart=None, sliceE
         #   On y va pour un calcul pour chaque point. Après tout y'en n'a plus tant que ça...
         logging.debug('sliceEnd - sliceStart <= echantillons')
         for i in range(sliceStart, sliceEnd):
-            dist2 = distanceP2(traceComplete[i], ptRef)
+            dist2 = distanceP2(traceComplete[i], ptRef, ignorer_altitude=ignorer_altitude)
             if dist2 <= dMax2:
                 proche = True
+                logging.debug('dist : {0}. dmax : {1}'.format(math.sqrt(dist2), math.sqrt(dMax2)))
                 logging.debug('Point {0} ({1} à {2} de ptRef'.format(i, traceComplete[i], dist2))
                 break
         if not proche:
-            logging.debug('Raté...')
+            logging.info('Raté...\n')
 
     else:
         #   liste de points échantillons
         lEch = [int(i * ((sliceEnd - sliceStart) / echantillons)) + sliceStart for i in range(echantillons)] + [sliceEnd -1]
-        if any(nl.level <= logging.DEBUG for nl in logger.handlers):
-            logging.debug('Liste des points échantillons :')
-            for e in lEch:
-                logging.debug(e)
+        logging.debug('Liste des points échantillons :')
+        for e in lEch:
+            logging.debug(e)
 
         #   Liste des distances entre le point échantillon et le point de référence
         ldist = []
 
         for (ildist, ipt) in enumerate(lEch):
-            dist2 = distanceP2(traceComplete[ipt], ptRef)
+            dist2 = distanceP2(traceComplete[ipt], ptRef, ignorer_altitude=ignorer_altitude)
             if dist2 <= dMax2:
                 proche = True
+                logging.debug('dist : {0}. dmax : {1}'.format(math.sqrt(dist2), math.sqrt(dMax2)))
                 logging.debug('Point {0} ({1} à {2} de ptRef'.format(ipt, traceComplete[ipt], dist2))
                 break   #   Oui, je sais, on pourrait mettre ici "return True", mais c'est vraiment dégueulasse.
             ldist.append([ildist, ipt, dist2])
 
         if not proche:
             ldist.sort(key=lambda x: x[2])
-            if any(nl.level <= logging.DEBUG for nl in logger.handlers):
-                logging.debug('ldist :')
-                for e in ldist:
-                    logging.debug(e)
+            logging.debug('ldist :')
+            for e in ldist:
+                logging.debug(e)
             """
                 En tête de cette liste on a donc les deux points de la trace qui sont les plus proches
                 du point de référence. Normalement ils sont consécutifs, mais c'est pas garanti.
@@ -486,10 +502,9 @@ def traceProche(traceComplete: list, ptRef: tuple, dMax, sliceStart=None, sliceE
             ltemp = ldist[:2]
             ltemp.sort()    #   Bin oui, on n'est pas sûr que le point le plus proche soit, dans la trace, avant le suivant...
 
-            if any(nl.level <= logging.DEBUG for nl in logger.handlers):
-                logging.debug('ltemp :')
-                for e in ltemp:
-                    logging.debug(e)
+            logging.debug('ltemp :')
+            for e in ltemp:
+                logging.debug(e)
 
             i1 = max(ltemp[0][0] - 1, 0)
             i2 = min(ltemp[1][0] + 1, len(lEch) - 1)
@@ -510,16 +525,16 @@ def traceProche(traceComplete: list, ptRef: tuple, dMax, sliceStart=None, sliceE
 
                 logging.debug('Les deux points les plus proches sont les extrémités de la trace')
                 proche = (ltemp[0][2] <= dMax2)
-                logging.debug('OK' if proche else 'raté')
+                logging.debug('OK\n' if proche else 'Raté\n')
             else:
-                #   proche = traceProche(trk[lEch[i1]:lEch[i2]], ptRef, dMax, echantillons=echantillons)
-                proche = traceProche(traceComplete, ptRef, dMax, lEch[i1], lEch[i2] + 1, echantillons=echantillons)
+                proche = traceProche(traceComplete, ptRef, dMax, ignorer_altitude=ignorer_altitude, sliceStart=lEch[i1], sliceEnd=lEch[i2] + 1, echantillons=echantillons)
 
     return proche
 
 
 # -----------------------------------------------------------------------------------------------------------------------------------------------------------
-def distancePointTrace(traceComplete: list, ptRef: tuple, sliceStart=None, sliceEnd=None, echantillons=20, nbPassages=None):
+@tracer
+def distancePointTrace(traceComplete: list, ptRef: tuple, *, ignorer_altitude=True, sliceStart=None, sliceEnd=None, echantillons=20, nbPassages=None):
     """
         Renvoie la distance entre un point donné et une trace (C'est la distance minimale entre
         ce point et tous les points de la traceComplete) et les informations sur le point de la traceComplete le plus proche
@@ -547,7 +562,7 @@ def distancePointTrace(traceComplete: list, ptRef: tuple, sliceStart=None, slice
         #   On y va pour un calcul pour chaque point. Après tout y'en n'a plus tant que ça...
         logging.debug('sliceEnd - sliceStart <= echantillons')
         for i in range(sliceStart, sliceEnd):
-            dist2 = distanceP2(traceComplete[i], ptRef)
+            dist2 = distanceP2(traceComplete[i], ptRef, ignorer_altitude=ignorer_altitude)
             if dist2 <= dmin2:
                 dmin2 = dist2
                 ptProche = traceComplete[i]
@@ -558,10 +573,9 @@ def distancePointTrace(traceComplete: list, ptRef: tuple, sliceStart=None, slice
     else:
         #   liste de points échantillons
         lEch = [int(i * ((sliceEnd - sliceStart) / echantillons)) + sliceStart for i in range(echantillons)] + [sliceEnd -1]
-        if any(nl.level <= logging.DEBUG for nl in logger.handlers):
-            logging.debug('Liste des points échantillons :')
-            for e in lEch:
-                logging.debug(e)
+        logging.debug('Liste des points échantillons :')
+        for e in lEch:
+            logging.debug(e)
 
         #   Liste des distances entre le point échantillon et le point de référence
         ldist = []
@@ -574,14 +588,13 @@ def distancePointTrace(traceComplete: list, ptRef: tuple, sliceStart=None, slice
         """
 
         for (ildist, ipt) in enumerate(lEch):
-            dist2 = distanceP2(traceComplete[ipt], ptRef)
+            dist2 = distanceP2(traceComplete[ipt], ptRef, ignorer_altitude=ignorer_altitude)
             ldist.append([ildist, ipt, dist2])
 
         ldist.sort(key=lambda x: x[2])
-        if any(nl.level <= logging.DEBUG for nl in logger.handlers):
-            logging.debug('ldist :')
-            for e in ldist:
-                logging.debug(e)
+        logging.debug('ldist :')
+        for e in ldist:
+            logging.debug(e)
         """
             En tête de cette liste on a donc les deux points de la trace qui sont les plus proches
             du point de référence. Normalement ils sont consécutifs, mais c'est pas garanti.
@@ -595,10 +608,9 @@ def distancePointTrace(traceComplete: list, ptRef: tuple, sliceStart=None, slice
         ltemp = ldist[:2]
         ltemp.sort()    #   Bin oui, on n'est pas sûr que le point le plus proche soit, dans la trace, avant le suivant...
 
-        if any(nl.level <= logging.DEBUG for nl in logger.handlers):
-            logging.debug('ltemp :')
-            for e in ltemp:
-                logging.debug(e)
+        logging.debug('ltemp :')
+        for e in ltemp:
+            logging.debug(e)
 
         i1 = max(ltemp[0][0] - 1, 0)
         i2 = min(ltemp[1][0] + 1, len(lEch) - 1)
@@ -621,7 +633,7 @@ def distancePointTrace(traceComplete: list, ptRef: tuple, sliceStart=None, slice
             retour = (math.sqrt(ltemp[0][2]), ltemp[0][1], traceComplete[ltemp[0][1]], nbPassages)
         else:
             #   proche = traceProche(trk[lEch[i1]:lEch[i2]], ptRef, dMax, echantillons=echantillons)
-            dmin, dummy1, dummy2, dummy3 = distancePointTrace(traceComplete, ptRef, lEch[i1], lEch[i2] + 1, echantillons=echantillons, nbPassages=nbPassages)
+            dmin, dummy1, dummy2, dummy3 = distancePointTrace(traceComplete, ptRef, ignorer_altitude=ignorer_altitude, sliceStart=lEch[i1], sliceEnd=lEch[i2] + 1, echantillons=echantillons, nbPassages=nbPassages)
             retour = (dmin, dummy1, dummy2, dummy3)
 
     return retour
@@ -660,7 +672,8 @@ def distanceP_V0(p1: tuple, p2: tuple, km=True)-> float:
 
 
 # -----------------------------------------------------------------------------------------------------------------------------------------------------------
-def distanceP2(p1: tuple, p2: tuple, km=True)-> float:
+@tracer
+def distanceP2(p1: tuple, p2: tuple, *, ignorer_altitude=True, km=False)-> float:
     """
         renvoie le carré la distance entre deux points (tuples latitude, longitude, altitude) calculée par le théorème 
         de Pythagore.
@@ -675,27 +688,36 @@ def distanceP2(p1: tuple, p2: tuple, km=True)-> float:
     lon2 = p2[1]
     alt2 = p2[2]
 
-    rLatDeg = rayonTerre((lat1 + lat2) / 2) + ((alt2 + alt2) / 2)
+    if ignorer_altitude:
+        rLatDeg = rayonTerre((lat1 + lat2) / 2)
+    else:
+        rLatDeg = rayonTerre((lat1 + lat2) / 2) + ((alt1 + alt2) / 2)
 
     distParallele = abs(rLatDeg * math.cos(((lat1 + lat2) / 2) * math.pi / 180) * ((lon2 - lon1) * math.pi / 180))
     distMeridien = abs(rLatDeg * (lat2 - lat1) * math.pi / 180)
-    distVerticale = abs(alt2 - alt1)
+
+    if ignorer_altitude:
+        distVerticale = 0
+    else:
+        distVerticale = abs(alt2 - alt1)
 
     distTotale2 = (distParallele * distParallele) + (distMeridien *distMeridien) + (distVerticale * distVerticale)
 
+    logging.debug('distanceP2 ignorer_altitude : {5}. rLatDeg = {0}, distP = {1}, distM = {2}, alt1 = {6}, alt2 = {7}, distVerticale = {3}. distTotale2 = {4}'.format(rLatDeg, distParallele, distMeridien, distVerticale, distTotale2, ignorer_altitude, alt1, alt2))
     if km:
         distTotale2 = distTotale2 / 1000000
+
     return distTotale2
 
 
 # -----------------------------------------------------------------------------------------------------------------------------------------------------------
-def distanceP(p1: tuple, p2: tuple, km=True)-> float:
+def distanceP(p1: tuple, p2: tuple, *, ignorer_altitude=True, km=False)-> float:
     """
         renvoie la distance entre deux points (tuples latitude, longitude, altitude) calculée par le théorème 
         de Pythagore.
         Simple, mais utilisable seulement sur de courtes distances.
     """
-    return math.sqrt(distanceP2(p1, p2, km))
+    return math.sqrt(distanceP2(p1, p2, ignorer_altitude=ignorer_altitude, km=km))
 
 
 # ---------------------------------------------------------------------------------------------

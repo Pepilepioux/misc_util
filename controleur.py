@@ -76,7 +76,7 @@ while 1:
         else:
             if data != '':
                 client_socket.send(data.encode())
-                client_socket.settimeout(0.5)
+                client_socket.settimeout(5)
 
                 try:
                     reponse = client_socket.recv(4096)
