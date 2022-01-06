@@ -453,7 +453,7 @@ class Recepteur:
 
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_socket.connect(('localhost', self.portEcoute))
-        kwargs['vars'].fini = True
+        #   kwargs['vars'].fini = True
         data = '%s stop' % self.moi
         client_socket.send(data.encode())
 

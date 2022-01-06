@@ -416,10 +416,10 @@ def traceProche_V0(trk: list, ptRef: tuple, dMax: float, echantillons=20):
                 logging.debug('Les deux points les plus proches sont les extrémités de la trace')
                 if distanceP2(trk[lEch[i2]], ptRef) <= dMax2 or distanceP2(trk[lEch[i1]], ptRef) <= dMax2:
                     proche = True
-                    logging.debug('C\'est bon.')
+                    logging.info('C\'est bon.')
                 else:
                     proche = False
-                    logging.debug('C\'est foutu !')
+                    logging.info('C\'est foutu !')
             else:
                 logging.debug('La liste a {0} points'.format(len(trk)))
                 logging.debug('On récurse entre les points {0} et {1}'.format(lEch[i1], lEch[i2]))
@@ -628,7 +628,7 @@ def distancePointTrace(traceComplete: list, ptRef: tuple, *, ignorer_altitude=Tr
                 on récurse entre ces points parce qu'on a étendu la tranche (voir plus haut), ça vaut peut-être
                 le coup de tenter une récursion SANS extension de tranche...
             """
-            logging.debug('Les deux points les plus proches sont les extrémités du segment, on sort.')
+            logging.info('Les deux points les plus proches sont les extrémités du segment, on sort.')
             ltemp.sort(key=lambda x: x[2])
             retour = (math.sqrt(ltemp[0][2]), ltemp[0][1], traceComplete[ltemp[0][1]], nbPassages)
         else:
@@ -772,5 +772,19 @@ def DegMinSec_Vers_degreDecimal(dms: tuple)-> float:
     return dms[0] + (dms[1] / 60) + (dms[2] / 3600)
 
 
+# -----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+def distance_horizon(altitude, latitude=48.4679)-> float:
+    """
+        Renvoie la distance à laquelle on voit l'horizon (sans obstacle, évidemment)
+    """
+    r = rayonTerre(latitude)
+    distance = r * math.tan(math.acos(r / (r + altitude)))
+
+    return distance
+
 
 # -----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+if __name__ == '__main__':
+    print(distance_horizon(4809, latitude=45.83))
