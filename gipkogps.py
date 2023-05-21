@@ -1,4 +1,4 @@
-#!/usr/bin/python
+﻿#!/usr/bin/python
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 
@@ -18,8 +18,13 @@ import logging.handlers
 import xml.etree.ElementTree
 import math
 import numpy as np
+import dateutil.parser
+from datetime import datetime, timedelta
 
 import monitoring
+
+DATE_VERSION = '2023-05-21'
+NS_PREFIXE = '{http://www.topografix.com/GPX/1/1}'
 
 rEquat = 6378137
 rPole = 6356752.3
@@ -71,24 +76,62 @@ def tracer(fonction):
         return resultat
     
     return func_wrapper
+
+
+# -----------------------------------------------------------------------------------------------------------
+def chrono_trace(fonction):
+    """
+        Un petit décorateur pour voir le temps passé dans une fonction.
+
+        Évolution 2018-10-23 : on utilise la clé '__fichierLog__' de kwargs.
+            Si elle n'existe pas, les infos sont affichées par un 'print'
+            Si c'est un fichier (résultat d'un "open..."), on écrit les résultats
+                dans ce fichier
+            Si c'est une chaine de caractères, on considère que c'est un nom de fichier
+                et on écrit les résultats dans ce fichier ouvert en mode 'append'
+
+        Évolution 2018-11-15 :
+            la clé '__fichierLog__' de kwargs peut aussi être un logger.
+
+            Modification de la présentation : au lieu d'écrire une ligne au début, une ligne
+            avec l'heure de fin et une ligne pour la durée les 3 infos sont rassemblées sur une
+            seule ligne, écrite à la sortie de la fonction.
+    """
+    logger = logging.getLogger()
+
+    def func_wrapper(*args, **kwargs):
+        def output(texte, **kwargs):
+            try:
+                fic = kwargs['__fichierLog__']
+                if type(fic) == _io.TextIOWrapper:
+                    fic.write('{0}\n'.format(texte))
+                else:
+                    if type(fic) == str:
+                        with open(fic, 'a') as f:
+                            f.write('{0}\n'.format(texte))
+                    else:
+                        if type(fic) == logging.RootLogger:
+                            logger.info(texte)
+                        else:
+                            print(texte)
+
+            except Exception as e:
+                print(texte)
+
+        #   --------------------------------------------------
+        debut = datetime.now()
+        resultat = fonction(*args, **kwargs)
+        fin = datetime.now()
+
+        texte = '{0}, entrée à {1}, sortie à {2}, durée : {3}'.format(fonction.__name__, debut.strftime('%H:%M:%S,%f'), fin.strftime('%H:%M:%S,%f'), (fin - debut))
+        output(texte, **kwargs)
+        return resultat
+
+    return func_wrapper
+
+
 # -----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def rayonTerre(latitude, radians=False):
-    """
-        Retourne le rayon de la terre à la latitude donnée.
-        Source: https://en.wikipedia.org/wiki/Earth_radius
-    """
-    if not radians:
-        latitude = latitude  * math.pi / 180
-
-    rayon = math.sqrt(
-                      (((rEquat2 * math.cos(latitude)) * (rEquat2 * math.cos(latitude))) + ((rPole2 * math.sin(latitude)) * (rPole2 * math.sin(latitude)))) /
-                      (((rEquat * math.cos(latitude)) * (rEquat * math.cos(latitude))) + ((rPole * math.sin(latitude)) * (rPole * math.sin(latitude))))
-    )
-
-    return rayon
-
-# -----------------------------------------------------------------------------------------------------------------------------------------------------------------------
-def rayonTerreV0(latitude, radians=False):
     """
         Retourne le rayon de la terre à la latitude donnée.
         Source: https://en.wikipedia.org/wiki/Earth_radius
@@ -227,11 +270,11 @@ def resumerTraces(nomRepBase, fichierSortie, separateur=';'):
         Pour tous les fichiers gpx de l'arborescence nomRepBase donne les informations nom du fichier,
         nombre de points, distance entre le point 0 et les points situés au quart, à la moitié, aux trois
         quarts, et le point final.
-        Met tout ça dans un fichier csv
+        Met tout Ã§a dans un fichier csv
     """
     listeFichiers = listeTraces(nomRepBase)
     listeResultats = []
-    enTete = ['Fichier', 'Nb points', '1 / 4', '1 / 2', '3 / 4', 'distance totale']
+    enTete = ['Fichier', 'Nb points', '1Â /Â 4', '1Â /Â 2', '3Â /Â 4', 'distance totale']
     listeResultats.append(separateur.join(enTete))
     for fic in listeFichiers:
         print(fic)
@@ -363,7 +406,7 @@ def traceProche_V0(trk: list, ptRef: tuple, dMax: float, echantillons=20):
     #   print('dMax2 : {0:5.3f}'.format(dMax2))
 
     if len(trk) <= echantillons:
-        #   On y va pour un calcul pour chaque point. Après tout y'en n'a plus tant que ça...
+        #   On y va pour un calcul pour chaque point. Après tout y'en n'a plus tant que Ã§a...
         for pt in trk:
             dist2 = distanceP2(pt, ptRef)
             if dist2 <= dMax2:
@@ -399,10 +442,10 @@ def traceProche_V0(trk: list, ptRef: tuple, dMax: float, echantillons=20):
             """
             #   print(ldist)
             #   for ipt in range(len(lEch)):
-            #       print('{0} : pt {1}, d² = {2:5.3f}'.format(ldist[ipt][0],  ldist[ipt][1],  ldist[ipt][2]))
+            #       print('{0} : pt {1}, dÂ² = {2:5.3f}'.format(ldist[ipt][0],  ldist[ipt][1],  ldist[ipt][2]))
 
             ltemp = ldist[:2]
-            ltemp.sort()    #   Bin oui, on n'est pas sûr que le point le plus proche soit, dans la trace, avant le suivant...
+            ltemp.sort()    #   Bin oui, on n'est pas sÃ»r que le point le plus proche soit, dans la trace, avant le suivant...
             #   if any(e.level <= logging.DEBUG for e in logger.handlers):
             #       for e in ldist[:4]:
             #           print(e)
@@ -441,7 +484,7 @@ def traceProche(traceComplete: list, ptRef: tuple, dMax, *, ignorer_altitude=Tru
         - index du point de trace le plus proche du point de référence
         - tuple (latitude, longitude, altitude) du point en question
         - nombre de récursions. Intéressant en phase d'étude et de mise au point. On
-            pourra le virer sans état d'âme.
+            pourra le virer sans état d'Ã¢me.
     """
     logging.debug('distancePointTrace. {1} points de trace, echantillons = {0}'.format(echantillons, len(traceComplete)))
     dMax2 = dMax * dMax
@@ -453,7 +496,7 @@ def traceProche(traceComplete: list, ptRef: tuple, dMax, *, ignorer_altitude=Tru
         sliceEnd = len(traceComplete)
 
     if sliceEnd - sliceStart <= echantillons:
-        #   On y va pour un calcul pour chaque point. Après tout y'en n'a plus tant que ça...
+        #   On y va pour un calcul pour chaque point. Après tout y'en n'a plus tant que Ã§a...
         logging.debug('sliceEnd - sliceStart <= echantillons')
         for i in range(sliceStart, sliceEnd):
             dist2 = distanceP2(traceComplete[i], ptRef, ignorer_altitude=ignorer_altitude)
@@ -500,7 +543,7 @@ def traceProche(traceComplete: list, ptRef: tuple, dMax, *, ignorer_altitude=Tru
             """
 
             ltemp = ldist[:2]
-            ltemp.sort()    #   Bin oui, on n'est pas sûr que le point le plus proche soit, dans la trace, avant le suivant...
+            ltemp.sort()    #   Bin oui, on n'est pas sÃ»r que le point le plus proche soit, dans la trace, avant le suivant...
 
             logging.debug('ltemp :')
             for e in ltemp:
@@ -518,8 +561,8 @@ def traceProche(traceComplete: list, ptRef: tuple, dMax, *, ignorer_altitude=Tru
                     Les deux points les plus proches sont les extrémités du segment. Si on essaie de dichotomer
                     encore, on va boucler. Donc c'est fini.
 
-                    Ça encore, c'est à creuser. Si on est tombé sur ces points directement, c'est sûr. Sinon, si
-                    on récurse entre ces points parce qu'on a étendu la tranche (voir plus haut), ça vaut peut-être
+                    Ça encore, c'est à creuser. Si on est tombé sur ces points directement, c'est sÃ»r. Sinon, si
+                    on récurse entre ces points parce qu'on a étendu la tranche (voir plus haut), Ã§a vaut peut-être
                     le coup de tenter une récursion SANS extension de tranche...
                 """
 
@@ -544,7 +587,7 @@ def distancePointTrace(traceComplete: list, ptRef: tuple, *, ignorer_altitude=Tr
         - index du point de trace le plus proche du point de référence
         - tuple (latitude, longitude, altitude) du point en question
         - nombre de récursions. Intéressant en phase d'étude et de mise au point. On
-            pourra le virer sans état d'âme.
+            pourra le virer sans état d'Ã¢me.
     """
     logging.debug('distancePointTrace, echantillons = {0}'.format(echantillons))
     dmin2 = float('inf')
@@ -559,7 +602,7 @@ def distancePointTrace(traceComplete: list, ptRef: tuple, *, ignorer_altitude=Tr
         nbPassages += 1
 
     if sliceEnd - sliceStart <= echantillons:
-        #   On y va pour un calcul pour chaque point. Après tout y'en n'a plus tant que ça...
+        #   On y va pour un calcul pour chaque point. Après tout y'en n'a plus tant que Ã§a...
         logging.debug('sliceEnd - sliceStart <= echantillons')
         for i in range(sliceStart, sliceEnd):
             dist2 = distanceP2(traceComplete[i], ptRef, ignorer_altitude=ignorer_altitude)
@@ -606,7 +649,7 @@ def distancePointTrace(traceComplete: list, ptRef: tuple, *, ignorer_altitude=Tr
         """
 
         ltemp = ldist[:2]
-        ltemp.sort()    #   Bin oui, on n'est pas sûr que le point le plus proche soit, dans la trace, avant le suivant...
+        ltemp.sort()    #   Bin oui, on n'est pas sÃ»r que le point le plus proche soit, dans la trace, avant le suivant...
 
         logging.debug('ltemp :')
         for e in ltemp:
@@ -624,8 +667,8 @@ def distancePointTrace(traceComplete: list, ptRef: tuple, *, ignorer_altitude=Tr
                 Les deux points les plus proches sont les extrémités du segment. Si on essaie de dichotomer
                 encore, on va boucler. Donc c'est fini.
 
-                Ça encore, c'est à creuser. Si on est tombé sur ces points directement, c'est sûr. Sinon, si
-                on récurse entre ces points parce qu'on a étendu la tranche (voir plus haut), ça vaut peut-être
+                Ça encore, c'est à creuser. Si on est tombé sur ces points directement, c'est sÃ»r. Sinon, si
+                on récurse entre ces points parce qu'on a étendu la tranche (voir plus haut), Ã§a vaut peut-être
                 le coup de tenter une récursion SANS extension de tranche...
             """
             logging.info('Les deux points les plus proches sont les extrémités du segment, on sort.')
@@ -648,7 +691,7 @@ def distanceP_V0(p1: tuple, p2: tuple, km=True)-> float:
 
         Version initiale : on renvoie la vraie distance. Dans la version suivante on renvoie la racinne carrée
         du carré de la distance. C'est pareil, mais c'est décomposé en deux fonctions, parce que quand il s'agit
-        simplement de faire des comparaisons les carrés suffisent, on économise en performances le coût de
+        simplement de faire des comparaisons les carrés suffisent, on économise en performances le coÃ»t de
         l'extraction de la racine carrée.
     """
     lat1 = p1[0]
@@ -673,13 +716,13 @@ def distanceP_V0(p1: tuple, p2: tuple, km=True)-> float:
 
 # -----------------------------------------------------------------------------------------------------------------------------------------------------------
 @tracer
-def distanceP2(p1: tuple, p2: tuple, *, ignorer_altitude=True, km=False)-> float:
+def distanceP2(p1: tuple, p2: tuple, *, ignorer_altitude=True, km=False, rayon=None)-> float:
     """
         renvoie le carré la distance entre deux points (tuples latitude, longitude, altitude) calculée par le théorème 
         de Pythagore.
         Simple, mais utilisable seulement sur de courtes distances.
         Carré parce que pour faire des comparaisons, supérieur ou inférieur, on peut travailler sur les carrés des
-        distances plutôt que sur les distances elles-mêmes et ça évite une très gourmande extraction de racine carrée.
+        distances plutôt que sur les distances elles-mêmes et Ã§a évite une très gourmande extraction de racine carrée.
     """
     lat1 = p1[0]
     lon1 = p1[1]
@@ -688,10 +731,14 @@ def distanceP2(p1: tuple, p2: tuple, *, ignorer_altitude=True, km=False)-> float
     lon2 = p2[1]
     alt2 = p2[2]
 
+    if not rayon:
+        rayon = rayonTerre((lat1 + lat2) / 2)
+
+
     if ignorer_altitude:
-        rLatDeg = rayonTerre((lat1 + lat2) / 2)
+        rLatDeg = rayon
     else:
-        rLatDeg = rayonTerre((lat1 + lat2) / 2) + ((alt1 + alt2) / 2)
+        rLatDeg = rayon + ((alt1 + alt2) / 2)
 
     distParallele = abs(rLatDeg * math.cos(((lat1 + lat2) / 2) * math.pi / 180) * ((lon2 - lon1) * math.pi / 180))
     distMeridien = abs(rLatDeg * (lat2 - lat1) * math.pi / 180)
@@ -711,13 +758,13 @@ def distanceP2(p1: tuple, p2: tuple, *, ignorer_altitude=True, km=False)-> float
 
 
 # -----------------------------------------------------------------------------------------------------------------------------------------------------------
-def distanceP(p1: tuple, p2: tuple, *, ignorer_altitude=True, km=False)-> float:
+def distanceP(p1: tuple, p2: tuple, *, ignorer_altitude=True, km=False, rayon=None)-> float:
     """
         renvoie la distance entre deux points (tuples latitude, longitude, altitude) calculée par le théorème 
         de Pythagore.
         Simple, mais utilisable seulement sur de courtes distances.
     """
-    return math.sqrt(distanceP2(p1, p2, ignorer_altitude=ignorer_altitude, km=km))
+    return math.sqrt(distanceP2(p1, p2, ignorer_altitude=ignorer_altitude, km=km, rayon=rayon))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -725,6 +772,11 @@ def distanceV(v1: np.array, v2: np.array, km=True)-> float:
     """
         Renvoie la distance entre deux points par l'arc sinus du produit vectoriel de leurs vecteurs
         (voir la classe PointGPS)
+
+        ATTENTION !
+        Les arguments doivent être des VECTEURS, pas des PoinGPS tout simples !
+        (au contraire de distanceP)
+
     """
     # sinAlpha = np.linalg.norm(np.cross(v1, v2)) / (np.linalg.norm(v1)* np.linalg.norm(v2))
     alpha = math.asin(np.linalg.norm(np.cross(v1, v2)) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
@@ -766,7 +818,7 @@ def degreDecimal_Vers_DegMinSec(dms: float)-> tuple:
 def DegMinSec_Vers_degreDecimal(dms: tuple)-> float:
     """
         Renvoie un réel degré décimal à partir d'une valeur en degrés, minutes, secondes.
-        À améliorer pour qu'elle puisse prendre en entrée des trucs comme "44° 56' 41.77" 
+        À améliorer pour qu'elle puisse prendre en entrée des trucs comme "44Â° 56' 41.77" 
     """
 
     return dms[0] + (dms[1] / 60) + (dms[2] / 3600)
@@ -783,7 +835,45 @@ def distance_horizon(altitude, latitude=48.4679)-> float:
     return distance
 
 
-# -----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#   -----------------------------------------------------------------------------------------
+def extraire_points_trace(nom_fichier):
+    tree = xml.etree.ElementTree.parse(nom_fichier)
+    root = tree.getroot()
+    liste_pts = []
+
+    nb = 0
+    for trkseg in root.iter(NS_PREFIXE + 'trkseg') :
+        for pt in trkseg.iter(NS_PREFIXE + 'trkpt') :
+            lat = float(pt.get('lat'))
+            lon = float(pt.get('lon'))
+            ele = float(pt.find(NS_PREFIXE + 'ele').text) # La méthode "get" ne marche pas, elle renvoie None...
+            date_heure = dateutil.parser.parse(pt.find(NS_PREFIXE + 'time').text)
+
+            liste_pts.append({'nb': nb, 'lat': lat, 'lon': lon, 'ele': ele, 'date_heure': date_heure})
+            nb += 1
+
+            #   if nb >= 20:
+            #       break
+
+    return liste_pts
+
+
+#   -----------------------------------------------------------------------------------------
+def distance_totale_trace(nom_fichier, ignorer_delta_lat=True):
+    liste_pts = extraire_points_trace(nom_fichier)
+    distance = 0
+
+    rayon_terre = rayonTerre(liste_pts[0]['lat']) if ignorer_delta_lat else None
+
+    for ipt in range(1, len(liste_pts)):
+        distance += distanceP((liste_pts[ipt - 1]['lat'], liste_pts[ipt - 1]['lon'], liste_pts[ipt - 1]['ele']),
+                                 (liste_pts[ipt]['lat'], liste_pts[ipt]['lon'], liste_pts[ipt]['ele']),
+                                 km=False, rayon=rayon_terre)
+
+    return distance
+
+
+#   -----------------------------------------------------------------------------------------
 
 
 if __name__ == '__main__':
