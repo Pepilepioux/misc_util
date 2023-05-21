@@ -16,7 +16,11 @@ import threading
 import inspect
 import traceback
 import _io
-import globalvars
+
+try:
+    import globalvars
+except Exception as excpt:
+    pass
 
 
 # -----------------------------------------------------------------------------------------------------------
